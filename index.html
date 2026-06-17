@@ -141,6 +141,24 @@
   .star { position:fixed; top:-30px; font-size:24px; z-index:49; pointer-events:none; animation:fall linear forwards; }
   @keyframes fall { to{ transform:translateY(105vh) rotate(360deg); opacity:0; } }
 
+  /* 부모(마스터) 모드 */
+  #master { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(40,35,20,.45); backdrop-filter:blur(2px); z-index:60; padding:16px; }
+  #master .card { background:#fff; border-radius:22px; padding:26px; text-align:center; max-width:340px;
+    box-shadow:0 20px 60px rgba(0,0,0,.25); animation:pop .35s ease; }
+  #master h2 { margin:4px 0; font-size:20px; }
+  #master .note { margin:8px 0; color:#6f6757; font-size:13px; font-weight:700; line-height:1.5; }
+  #master input { width:100%; box-sizing:border-box; border:2px solid var(--line-thin); border-radius:12px;
+    padding:12px; font-size:18px; font-weight:800; text-align:center; margin:6px 0; color:var(--ink); background:#fffdf8; }
+  #master input:focus { outline:none; border-color:var(--accent); }
+  #master .err { color:#c0392b; font-size:13px; font-weight:800; min-height:18px; margin:2px 0; }
+  #master .winbtns { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+  #master .btn { padding:12px 18px; }
+  .master-badge { display:inline-flex; align-items:center; gap:6px; background:#eaf1ff; color:#2f57a8;
+    border:2px solid #c7d8ff; border-radius:999px; padding:5px 12px; font-size:12.5px; font-weight:800;
+    cursor:pointer; margin:4px 0; }
+  h1 { -webkit-user-select:none; user-select:none; }
+
   /* ===== 가로(태블릿) 레이아웃: 왼쪽 사이드바 + 오른쪽 본문 ===== */
   @media (min-width:820px) and (orientation:landscape) {
     :root { --bw: min(56vh, 50vw, 620px); --panel: 100%; }
@@ -226,6 +244,18 @@
   </div>
 </div>
 
+<div id="master">
+  <div class="card">
+    <div style="font-size:36px">🔐</div>
+    <h2 id="masterTitle">부모 모드</h2>
+    <div class="note" id="masterNote"></div>
+    <input type="password" id="masterPw1" inputmode="numeric" placeholder="비밀번호">
+    <input type="password" id="masterPw2" inputmode="numeric" placeholder="비밀번호 확인" style="display:none">
+    <div class="err" id="masterErr"></div>
+    <div class="winbtns" id="masterBtns"></div>
+  </div>
+</div>
+
 <script>
 "use strict";
 
@@ -271,7 +301,7 @@ let save;
 function loadSave(){
   let s=null; try { s=JSON.parse(Store.get(KEY)); } catch(e){ s=null; }
   if(!s||typeof s!=="object") s={};
-  save=Object.assign({ maxLevel:0, stars:{}, score:0, streak:0, bestStreak:0, lastMissionDate:"", days:{} }, s);
+  save=Object.assign({ maxLevel:0, stars:{}, score:0, streak:0, bestStreak:0, lastMissionDate:"", days:{}, masterPw:"" }, s);
   if(save.lastMissionDate && save.lastMissionDate!==today() && save.lastMissionDate!==yesterday()) save.streak=0;
   persist();
 }
@@ -334,6 +364,11 @@ function candidates(g,N,br,bc,r,c){
 /* ===== 4) 게임 진행 ===== */
 const ui={ level:0, st:null, diff:"easy", puzzle:[], solution:[], current:[], given:[], selected:null, hintCell:null, hintsUsed:0 };
 const stageIndex=()=>Math.floor(ui.level/DIFFS.length);
+
+let masterOn=false;                                   // 부모(마스터) 모드: 세션 한정(저장 안 함)
+const encPw=p=>btoa(unescape(encodeURIComponent(p))); // 가벼운 난독화(보안 아님, 아이 차단용)
+const hasMasterPw=()=>!!save.masterPw;                // 부모 비밀번호 설정 여부
+const checkPw=p=>save.masterPw===encPw(p);            // 비밀번호 일치 확인
 
 function newPuzzle(){
   ui.st=STAGES[stageIndex()]; ui.diff=LEVELS[ui.level].diff;
@@ -420,18 +455,20 @@ function renderStrip(){
   const m=$("#mission");
   if(save.lastMissionDate===today()){ m.className="mission done"; m.textContent="오늘의 미션 완료! 🎉 내일 또 만나요 (더 풀어도 좋아요)"; }
   else { m.className="mission"; m.textContent=`오늘의 미션: 2문제 풀기 (${todayCount()}/${DAILY_TARGET}) ✏️`; }
+  const old=$("#masterBadge"); if(old) old.remove();
+  if(masterOn){ const bd=document.createElement("div"); bd.id="masterBadge"; bd.className="master-badge"; bd.textContent="🔓 부모 모드 (끄기)"; bd.onclick=openMaster; m.parentNode.appendChild(bd); }
 }
 function renderSelectors(){
   const sr=$("#stageRow"); sr.innerHTML="";
   STAGES.forEach((st,si)=>{
-    const unlocked=idxOf(si,0)<=save.maxLevel;
+    const unlocked=masterOn||idxOf(si,0)<=save.maxLevel;
     const b=document.createElement("button");
     b.className="pill size"+(si===stageIndex()?" on":"")+(unlocked?"":" locked");
     b.textContent=unlocked?st.label:st.label+" 🔒"; b.onclick=()=>chooseStage(si,unlocked); sr.appendChild(b);
   });
   const dr=$("#diffRow"); dr.innerHTML=""; const si=stageIndex();
   DIFFS.forEach((df,di)=>{
-    const lv=idxOf(si,di),unlocked=lv<=save.maxLevel,cleared=clearedLevel(lv);
+    const lv=idxOf(si,di),unlocked=masterOn||lv<=save.maxLevel,cleared=clearedLevel(lv);
     const b=document.createElement("button");
     b.className="pill diff"+(lv===ui.level?" on":"")+(unlocked?"":" locked");
     b.textContent=df.label+(!unlocked?" 🔒":(cleared?" ✓":"")); b.onclick=()=>chooseDiff(di,unlocked); dr.appendChild(b);
@@ -444,7 +481,7 @@ function renderProgress(){
 }
 function chooseStage(si,unlocked){
   if(!unlocked){ statusEl.textContent="앞 단계를 모두 끝내면 열려요! 🔒"; return; }
-  let di=0; for(let k=DIFFS.length-1;k>=0;k--){ if(idxOf(si,k)<=save.maxLevel){ di=k; break; } }
+  let di=0; if(!masterOn) for(let k=DIFFS.length-1;k>=0;k--){ if(idxOf(si,k)<=save.maxLevel){ di=k; break; } }
   ui.level=idxOf(si,di); newPuzzle();
 }
 function chooseDiff(di,unlocked){
@@ -461,6 +498,7 @@ function checkWin(){
   onSolve();
 }
 function onSolve(){
+  if(masterOn){ rainStars(); statusEl.textContent="부모 모드: 잘 풀었어요! (기록에는 저장 안 돼요) 🔓"; setTimeout(newPuzzle,1200); return; }
   save.score+=POINTS;
   const lv=ui.level; save.stars[lv]=(save.stars[lv]||0)+1;
   const t=today(); save.days[t]=(save.days[t]||0)+1; const tc=save.days[t];
@@ -543,11 +581,89 @@ function renderCalendar(){
   }
 }
 
+/* ===== 7.5) 부모(마스터) 모드 — 단계 임시 개방 + 원하는 단계까지 영구 개방 + 비번 변경/초기화 ===== */
+let _mTimer=null, _resetArmed=false;
+function addMBtn(box,label,kind,fn){ const b=document.createElement("button"); b.className="btn "+kind; b.textContent=label; b.onclick=fn; box.appendChild(b); }
+function _mView(){ _resetArmed=false; $("#masterErr").textContent=""; const p1=$("#masterPw1"),p2=$("#masterPw2"); p1.value=""; p2.value="";
+  $("#masterBtns").innerHTML=""; return {t:$("#masterTitle"),nt:$("#masterNote"),p1,p2,btns:$("#masterBtns")}; }
+function openMaster(){ $("#master").style.display="flex"; if(masterOn) mMenu(); else if(!hasMasterPw()) mCreate(); else mInput(); }
+function closeMaster(){ $("#master").style.display="none"; }
+
+function mMenu(){                                  // (c) 부모 모드 ON — 메뉴
+  const {t,nt,p1,p2,btns}=_mView();
+  t.textContent="부모 모드 🔓";
+  nt.innerHTML=`모든 단계를 자유롭게 풀 수 있어요.<br>단계를 고른 뒤 <b>여기까지 열어주기</b>를 누르면<br>부모 모드를 꺼도 아이가 그 단계까지 풀 수 있어요.<br><br>지금 화면: <b>${LEVELS[ui.level].label}</b>`;
+  p1.style.display="none"; p2.style.display="none";
+  addMBtn(btns,`여기까지 열어주기 (${LEVELS[ui.level].label})`,"new",openUpTo);
+  addMBtn(btns,"부모 모드 끄기","new",toggleMasterOff);
+  addMBtn(btns,"비밀번호 변경","ghost",mChange);
+  addMBtn(btns,"닫기","ghost",closeMaster);
+}
+function mInput(){                                 // (b) 설정됨 & OFF — 입력
+  const {t,nt,p1,p2,btns}=_mView();
+  t.textContent="부모 비밀번호 입력"; nt.textContent="비밀번호를 입력하면 모든 단계가 열려요.";
+  p1.style.display=""; p2.style.display="none"; p1.placeholder="비밀번호";
+  addMBtn(btns,"확인","new",submitMaster);
+  addMBtn(btns,"비밀번호 초기화","ghost",resetPw);
+  addMBtn(btns,"취소","ghost",closeMaster);
+  setTimeout(()=>p1.focus(),50);
+}
+function mCreate(){                                // (a) 미설정 — 만들기
+  const {t,nt,p1,p2,btns}=_mView();
+  t.textContent="부모 비밀번호 만들기"; nt.textContent="부모가 단계를 열 수 있어요. 4자리 이상 추천.";
+  p1.style.display=""; p2.style.display=""; p1.placeholder="새 비밀번호"; p2.placeholder="비밀번호 확인";
+  addMBtn(btns,"만들기","new",()=>savePw(true));
+  addMBtn(btns,"취소","ghost",closeMaster);
+  setTimeout(()=>p1.focus(),50);
+}
+function mChange(){                                // 비밀번호 변경 (이미 인증된 상태)
+  const {t,nt,p1,p2,btns}=_mView();
+  t.textContent="비밀번호 변경"; nt.textContent="새 비밀번호를 정해 주세요. 4자리 이상 추천.";
+  p1.style.display=""; p2.style.display=""; p1.placeholder="새 비밀번호"; p2.placeholder="비밀번호 확인";
+  addMBtn(btns,"변경","new",()=>savePw(false));
+  addMBtn(btns,"취소","ghost",mMenu);
+  setTimeout(()=>p1.focus(),50);
+}
+function savePw(enable){                           // 만들기/변경 공통
+  const a=$("#masterPw1").value.trim(), b=$("#masterPw2").value.trim();
+  if(a.length<4){ $("#masterErr").textContent="4자리 이상으로 정해 주세요."; return; }
+  if(a!==b){ $("#masterErr").textContent="두 비밀번호가 달라요."; return; }
+  save.masterPw=encPw(a); persist(); if(enable) masterOn=true;
+  closeMaster(); renderMeta(); statusEl.textContent=enable?"부모 모드가 켜졌어요 🔓":"비밀번호를 바꿨어요 ✅";
+}
+function submitMaster(){
+  if(!checkPw($("#masterPw1").value.trim())){ $("#masterErr").textContent="비밀번호가 틀렸어요."; return; }
+  masterOn=true; closeMaster(); renderMeta(); statusEl.textContent="부모 모드가 켜졌어요 🔓";
+}
+function resetPw(){                                // 비밀번호 초기화(점수·도장은 유지) — 한 번 더 눌러 확인
+  if(!_resetArmed){ _resetArmed=true; $("#masterErr").textContent="한 번 더 누르면 비밀번호를 지워요(점수·도장은 유지)."; return; }
+  save.masterPw=""; persist(); mCreate();
+}
+function openUpTo(){                               // 지금 화면 단계까지 아이에게 영구 개방
+  if(ui.level>save.maxLevel){ save.maxLevel=ui.level; persist(); }
+  closeMaster(); renderMeta(); statusEl.textContent=`이제 아이가 [${LEVELS[ui.level].label}]까지 풀 수 있어요 🔓`;
+}
+function toggleMasterOff(){
+  masterOn=false; closeMaster();
+  if(ui.level>save.maxLevel){ ui.level=save.maxLevel; newPuzzle(); }  // 잠긴 레벨이면 되돌림
+  else renderMeta();
+  statusEl.textContent="부모 모드가 꺼졌어요.";
+}
+function bindLongPress(el,fn,ms){
+  const start=()=>{ clearTimeout(_mTimer); _mTimer=setTimeout(fn,ms||800); };
+  const cancel=()=>clearTimeout(_mTimer);
+  el.addEventListener("touchstart",start,{passive:true}); el.addEventListener("touchend",cancel);
+  el.addEventListener("touchmove",cancel); el.addEventListener("touchcancel",cancel);
+  el.addEventListener("mousedown",start); el.addEventListener("mouseup",cancel); el.addEventListener("mouseleave",cancel);
+  el.addEventListener("contextmenu",e=>e.preventDefault());  // 길게 눌러도 컨텍스트 메뉴 차단
+}
+
 /* ===== 8) 시작 ===== */
 $("#erase").onclick=erase; $("#hintBtn").onclick=hint; $("#newBtn").onclick=newPuzzle;
 $("#tabGame").onclick=()=>navTo("game"); $("#tabHistory").onclick=()=>navTo("history");
 $("#calPrev").onclick=()=>{ calM--; if(calM<0){ calM=11; calY--; } renderCalendar(); };
 $("#calNext").onclick=()=>{ calM++; if(calM>11){ calM=0; calY++; } renderCalendar(); };
+bindLongPress($("h1"),openMaster,800);
 
 document.body.classList.add("mode-game");
 loadSave();

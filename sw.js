@@ -1,6 +1,6 @@
 /* 별 사냥 스도쿠 — 오프라인 캐싱 서비스워커 */
 /* 파일을 수정해 다시 배포할 때는 아래 버전 숫자를 올리세요 (예: v1 → v2) */
-const CACHE = "byeolsudoku-v3";
+const CACHE = "byeolsudoku-v4";
 const ASSETS = [
   "./",
   "./index.html",

@@ -162,9 +162,11 @@
   /* ===== 가로(태블릿) 레이아웃: 왼쪽 사이드바 + 오른쪽 본문 ===== */
   @media (min-width:820px) and (orientation:landscape) {
     :root { --bw: min(56vh, 50vw, 620px); --panel: 100%; }
+    /* 전체 블록을 화면 세로 중앙에 배치(내용 높이만큼만 차지하고 body가 가운데로 정렬) */
+    body { display:flex; flex-direction:column; justify-content:center; }
     /* 사이드바와 보드를 위(상단)로 맞춰 정렬, 둘을 가깝게 묶음 */
     .layout { flex-direction:row; align-items:flex-start; justify-content:center;
-      gap:24px; min-height:calc(100vh - 24px); max-width:1500px; margin:0 auto; }
+      gap:24px; max-width:1500px; margin:0 auto; }
     .sidebar { width:380px; flex:0 0 380px; align-items:stretch; overflow-y:auto; }
     .strip, .controls, .progress { margin-left:0; margin-right:0; }
     /* width:auto 로 본문을 보드 크기에 맞춰 줄여, 보드가 넓은 영역에서 가운데로 밀려나지 않게 함 */

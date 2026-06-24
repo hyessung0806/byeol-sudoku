@@ -685,10 +685,20 @@ newPuzzle();
 </script>
 
 <script>
-/* PWA 서비스워커 등록 (오프라인 실행용) */
+/* PWA 서비스워커 등록 + 자동 업데이트 (오프라인 실행용) */
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
-    navigator.serviceWorker.register("sw.js").catch(function () {});
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (reg) {
+      reg.update();   // 열 때마다 새 버전 확인
+      document.addEventListener("visibilitychange", function () { if (!document.hidden) reg.update(); });
+    }).catch(function () {});
+    // 새 버전이 제어를 잡으면 한 번만 새로고침 (최초 설치 때는 제외)
+    var refreshing = false;
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        if (refreshing) return; refreshing = true; window.location.reload();
+      });
+    }
   });
 }
 </script>
